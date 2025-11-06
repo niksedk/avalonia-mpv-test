@@ -101,14 +101,15 @@ public sealed class MpvPlayer : IDisposable
             return
             [
                 MpvPath,
+                "C:\\git\\subtitleedit\\src\\ui\\bin\\Debug\\net48",
                 string.Empty,
             ];
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             return
-           [
-               MpvPath,
+            [
+                MpvPath,
                 "/lib64",
                 "/usr/lib64",
                 "/lib",
