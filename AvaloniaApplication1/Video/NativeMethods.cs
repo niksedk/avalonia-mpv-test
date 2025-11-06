@@ -5,67 +5,46 @@ namespace Nikse.SubtitleEdit.Logic
 {
     internal static class NativeMethods
     {
-        // Win32 API functions for dynamically loading DLLs
-        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi, BestFitMapping = false)]
+        // Windows
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
         internal static extern IntPtr LoadLibrary(string dllToLoad);
 
-        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi, BestFitMapping = false)]
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
         internal static extern IntPtr GetProcAddress(IntPtr hModule, string procedureName);
 
         [DllImport("kernel32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool FreeLibrary(IntPtr hModule);
-        
 
-        // Linux
+        // POSIX constants
         internal const int LC_NUMERIC = 1;
-
-        internal const int RTLD_NOW = 0x0001;
+        internal const int RTLD_NOW = 0x0002;
         internal const int RTLD_GLOBAL = 0x0100;
 
-        [DllImport("libc.so.6")]
+        // Linux / macOS (use same names)
+        [DllImport("libc")]
         internal static extern IntPtr setlocale(int category, string locale);
 
-        [DllImport("libdl.so.2")]
+        [DllImport("libdl")]
         internal static extern IntPtr dlopen(string filename, int flags);
 
-        [DllImport("libdl.so.2")]
+        [DllImport("libdl")]
         internal static extern IntPtr dlclose(IntPtr handle);
 
-        [DllImport("libdl.so.2")]
+        [DllImport("libdl")]
         internal static extern IntPtr dlsym(IntPtr handle, string symbol);
 
-        // macOS
-        [DllImport("libc.dylib")]
-        internal static extern IntPtr setlocale_mac(int category, string locale);
-
-        [DllImport("libdl.dylib")]
-        internal static extern IntPtr dlopen_mac(string filename, int flags);
-
-        [DllImport("libdl.dylib")]
-        internal static extern IntPtr dlclose_mac(IntPtr handle);
-
-        [DllImport("libdl.dylib")]
-        internal static extern IntPtr dlsym_mac(IntPtr handle, string symbol);
-
-
-        // cross-platform wrappers
+        // Cross-platform wrappers
         internal static IntPtr CrossLoadLibrary(string fileName)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 return LoadLibrary(fileName);
             }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            else
             {
                 return dlopen(fileName, RTLD_NOW | RTLD_GLOBAL);
             }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                return dlopen_mac(fileName, RTLD_NOW | RTLD_GLOBAL);
-            }
-
-            throw new PlatformNotSupportedException("Unsupported OS platform.");
         }
 
         internal static void CrossFreeLibrary(IntPtr handle)
@@ -74,17 +53,9 @@ namespace Nikse.SubtitleEdit.Logic
             {
                 FreeLibrary(handle);
             }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                dlclose(handle);
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                dlclose_mac(handle);
-            }
             else
             {
-                throw new PlatformNotSupportedException("Unsupported OS platform.");
+                dlclose(handle);
             }
         }
 
@@ -94,21 +65,15 @@ namespace Nikse.SubtitleEdit.Logic
             {
                 return GetProcAddress(handle, name);
             }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            else
             {
                 return dlsym(handle, name);
             }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                return dlsym_mac(handle, name);
-            }
-
-            throw new PlatformNotSupportedException("Unsupported OS platform.");
         }
 
-        internal static object? GetDllType(nint handle, Type type, string name)
+        internal static object? GetDllType(IntPtr handle, Type type, string name)
         {
-            var address = NativeMethods.CrossGetProcAddress(handle, name);
+            var address = CrossGetProcAddress(handle, name);
             return address != IntPtr.Zero ? Marshal.GetDelegateForFunctionPointer(address, type) : null;
         }
     }
