@@ -35,6 +35,19 @@ namespace Nikse.SubtitleEdit.Logic
         [DllImport("libdl.so.2")]
         internal static extern IntPtr dlsym(IntPtr handle, string symbol);
 
+        // macOS
+        [DllImport("libc.dylib")]
+        internal static extern IntPtr setlocale_mac(int category, string locale);
+
+        [DllImport("libdl.dylib")]
+        internal static extern IntPtr dlopen_mac(string filename, int flags);
+
+        [DllImport("libdl.dylib")]
+        internal static extern IntPtr dlclose_mac(IntPtr handle);
+
+        [DllImport("libdl.dylib")]
+        internal static extern IntPtr dlsym_mac(IntPtr handle, string symbol);
+
 
         // cross-platform wrappers
         internal static IntPtr CrossLoadLibrary(string fileName)
@@ -43,8 +56,16 @@ namespace Nikse.SubtitleEdit.Logic
             {
                 return LoadLibrary(fileName);
             }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                return dlopen(fileName, RTLD_NOW | RTLD_GLOBAL);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return dlopen_mac(fileName, RTLD_NOW | RTLD_GLOBAL);
+            }
 
-            return dlopen(fileName, RTLD_NOW | RTLD_GLOBAL);
+            throw new PlatformNotSupportedException("Unsupported OS platform.");
         }
 
         internal static void CrossFreeLibrary(IntPtr handle)
@@ -57,6 +78,14 @@ namespace Nikse.SubtitleEdit.Logic
             {
                 dlclose(handle);
             }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                dlclose_mac(handle);
+            }
+            else
+            {
+                throw new PlatformNotSupportedException("Unsupported OS platform.");
+            }
         }
 
         internal static IntPtr CrossGetProcAddress(IntPtr handle, string name)
@@ -68,6 +97,10 @@ namespace Nikse.SubtitleEdit.Logic
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 return dlsym(handle, name);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return dlsym_mac(handle, name);
             }
 
             throw new PlatformNotSupportedException("Unsupported OS platform.");
