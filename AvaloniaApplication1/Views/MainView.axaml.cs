@@ -1,6 +1,4 @@
-﻿using System;
-using System.IO;
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Interactivity;
 using AvaloniaApplication1.Video;
 using AvaloniaApplication1.Views.Controls;
@@ -33,7 +31,7 @@ public partial class MainView : UserControl
             }
         };
         var paths = await ofd.ShowAsync(VisualRoot as Window);
-        if (paths != null && paths.Length >0)
+        if (paths != null && paths.Length > 0)
         {
             _player.LoadFile(paths[0]);
         }
