@@ -12,8 +12,10 @@ public sealed class MpvPlayer : IDisposable
 
     private IntPtr _library = IntPtr.Zero;
     private IntPtr _mpv = IntPtr.Zero;
+    private IntPtr _renderContext = IntPtr.Zero;
     private bool _disposed;
 
+    // Basic mpv functions
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate IntPtr MpvCreate();
     private MpvCreate? _mpvCreate;
@@ -44,7 +46,6 @@ public sealed class MpvPlayer : IDisposable
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int MpvGetPropertyDouble(IntPtr mpvHandle, byte[] name, int format, ref double data);
-
     private MpvGetPropertyDouble _mpvGetPropertyDouble;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -67,6 +68,50 @@ public sealed class MpvPlayer : IDisposable
     private delegate IntPtr MpvTerminateDestroy(IntPtr mpvHandle);
     private MpvTerminateDestroy _mpvTerminateDestroy;
 
+    // Render API functions
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int MpvRenderContextCreate(out IntPtr res, IntPtr mpvHandle, IntPtr parameters);
+    private MpvRenderContextCreate _mpvRenderContextCreate;
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int MpvRenderContextRender(IntPtr ctx, IntPtr parameters);
+    private MpvRenderContextRender _mpvRenderContextRender;
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void MpvRenderContextFree(IntPtr ctx);
+    private MpvRenderContextFree _mpvRenderContextFree;
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void MpvRenderContextSetUpdateCallback(IntPtr ctx, IntPtr callback, IntPtr callbackCtx);
+    private MpvRenderContextSetUpdateCallback _mpvRenderContextSetUpdateCallback;
+
+    // OpenGL proc address callback - public delegate for external use
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate IntPtr GetProcAddress(IntPtr ctx, string name);
+
+    // Internal mpv callback wrapper
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr MpvGetProcAddressFunc(IntPtr ctx, string name);
+
+    // Render callback
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void MpvRenderUpdateFunc(IntPtr ctx);
+
+    private GetProcAddress? _getProcAddress;
+    private MpvRenderUpdateFunc? _renderUpdateCallback;
+
+    // Render API constants
+    private const int MPV_RENDER_PARAM_API_TYPE = 1;
+    private const int MPV_RENDER_PARAM_OPENGL_INIT_PARAMS = 2;
+    private const int MPV_RENDER_PARAM_OPENGL_FBO = 3;
+    private const int MPV_RENDER_PARAM_FLIP_Y = 4;
+    private const int MPV_RENDER_PARAM_DEPTH = 5;
+    private const int MPV_RENDER_PARAM_INVALID = 0;
+
+    private const string MPV_RENDER_API_TYPE_OPENGL = "opengl";
+
+    public event Action? RequestRender;
+
     public MpvPlayer()
     {
     }
@@ -75,10 +120,7 @@ public sealed class MpvPlayer : IDisposable
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            return
-            [
-                "libmpv-2.dll",
-            ];
+            return ["libmpv-2.dll"];
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
@@ -152,6 +194,12 @@ public sealed class MpvPlayer : IDisposable
         _mpvClientApiVersion = (MpvClientApiVersion)GetDllType(typeof(MpvClientApiVersion), "mpv_client_api_version");
         _mpvErrorString = (MpvErrorString)GetDllType(typeof(MpvErrorString), "mpv_error_string");
         _mpvTerminateDestroy = (MpvTerminateDestroy)GetDllType(typeof(MpvTerminateDestroy), "mpv_terminate_destroy");
+
+        // Load render API functions
+        _mpvRenderContextCreate = (MpvRenderContextCreate)GetDllType(typeof(MpvRenderContextCreate), "mpv_render_context_create");
+        _mpvRenderContextRender = (MpvRenderContextRender)GetDllType(typeof(MpvRenderContextRender), "mpv_render_context_render");
+        _mpvRenderContextFree = (MpvRenderContextFree)GetDllType(typeof(MpvRenderContextFree), "mpv_render_context_free");
+        _mpvRenderContextSetUpdateCallback = (MpvRenderContextSetUpdateCallback)GetDllType(typeof(MpvRenderContextSetUpdateCallback), "mpv_render_context_set_update_callback");
     }
 
     private object GetDllType(Type type, string name)
@@ -204,7 +252,7 @@ public sealed class MpvPlayer : IDisposable
 
     public static IntPtr AllocateUtf8IntPtrArrayWithSentinel(string[] arr, out IntPtr[] byteArrayPointers)
     {
-        var numberOfStrings = arr.Length + 1; // add extra element for extra null pointer last (sentinel)
+        var numberOfStrings = arr.Length + 1;
         byteArrayPointers = new IntPtr[numberOfStrings];
         IntPtr rootPointer = Marshal.AllocCoTaskMem(IntPtr.Size * numberOfStrings);
         for (var index = 0; index < arr.Length; index++)
@@ -235,43 +283,208 @@ public sealed class MpvPlayer : IDisposable
         return result;
     }
 
-    public void InitializeWithWindowHandle(nint hwnd)
+    private IntPtr GetOpenGLProcAddress(IntPtr ctx, string name)
+    {
+        // Use the platform-specific method to get OpenGL proc addresses
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            // On macOS, we need to use NSOpenGLGetProcAddress or similar
+            // For Avalonia, this should be handled by the OpenGL context
+            return NativeMethods.CrossGetProcAddress(IntPtr.Zero, name);
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return NativeMethods.CrossGetProcAddress(IntPtr.Zero, name);
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return NativeMethods.CrossGetProcAddress(IntPtr.Zero, name);
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void OnRenderUpdate(IntPtr ctx)
+    {
+        // Request a redraw from the UI thread
+        RequestRender?.Invoke();
+    }
+
+    public void InitializeWithOpenGL(GetProcAddress getProcAddress)
     {
         LoadLib();
         EnsureNotDisposed();
 
-        // Configure video output before initialize.
-        var err = SetOptionString("vo", "gpu");
+        _getProcAddress = getProcAddress;
+
+        // Initialize mpv first
+        var err = _mpvInitialize(_mpv);
         if (err < 0)
         {
             throw new InvalidOperationException(GetErrorString(err));
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        // Create OpenGL init params
+        var initParams = new MpvOpenGLInitParams
         {
-            // Prefer d3d11 on Windows; if unsupported, mpv will fallback.
-            SetOptionString("gpu-api", "d3d11");
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            // On macOS the 'wid' accepts NSView* pointer value.
-            SetOptionString("gpu-api", "metal");
-        }
+            get_proc_address = Marshal.GetFunctionPointerForDelegate<MpvGetProcAddressFunc>(
+                new MpvGetProcAddressFunc((ctx, name) => getProcAddress(ctx, name))
+            ),
+            get_proc_address_ctx = IntPtr.Zero
+        };
 
-        if (hwnd != 0)
+        var initParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf<MpvOpenGLInitParams>());
+        Marshal.StructureToPtr(initParams, initParamsPtr, false);
+
+        try
         {
-            // Tell mpv to render into our embedded native child surface
-            err = SetOptionString("wid", hwnd.ToInt64().ToString());
+            // Build render context params
+            var apiTypeBytes = Encoding.UTF8.GetBytes(MPV_RENDER_API_TYPE_OPENGL + "\0");
+            var apiTypePtr = Marshal.AllocHGlobal(apiTypeBytes.Length);
+            Marshal.Copy(apiTypeBytes, 0, apiTypePtr, apiTypeBytes.Length);
+
+            var renderParams = new[]
+            {
+                new MpvRenderParam { type = MPV_RENDER_PARAM_API_TYPE, data = apiTypePtr },
+                new MpvRenderParam { type = MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, data = initParamsPtr },
+                new MpvRenderParam { type = MPV_RENDER_PARAM_INVALID, data = IntPtr.Zero }
+            };
+
+            var renderParamsSize = Marshal.SizeOf<MpvRenderParam>() * renderParams.Length;
+            var renderParamsPtr = Marshal.AllocHGlobal(renderParamsSize);
+
+            for (int i = 0; i < renderParams.Length; i++)
+            {
+                var offset = renderParamsPtr + (i * Marshal.SizeOf<MpvRenderParam>());
+                Marshal.StructureToPtr(renderParams[i], offset, false);
+            }
+
+            // Create render context
+            err = _mpvRenderContextCreate(out _renderContext, _mpv, renderParamsPtr);
+            if (err < 0)
+            {
+                throw new InvalidOperationException($"Failed to create render context: {GetErrorString(err)}");
+            }
+
+            // Set update callback
+            _renderUpdateCallback = OnRenderUpdate;
+            var callbackPtr = Marshal.GetFunctionPointerForDelegate(_renderUpdateCallback);
+            _mpvRenderContextSetUpdateCallback(_renderContext, callbackPtr, IntPtr.Zero);
+
+            // Cleanup
+            Marshal.FreeHGlobal(renderParamsPtr);
+            Marshal.FreeHGlobal(apiTypePtr);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(initParamsPtr);
+        }
+    }
+
+    public void InitializeWithWindowHandle(nint hwnd)
+    {
+        // Use window embedding for Windows and Linux
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || 
+            RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            LoadLib();
+            EnsureNotDisposed();
+
+            var err = SetOptionString("vo", "gpu");
+            if (err < 0)
+            {
+                throw new InvalidOperationException(GetErrorString(err));
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                SetOptionString("gpu-api", "d3d11");
+            }
+
+            if (hwnd != 0)
+            {
+                err = SetOptionString("wid", hwnd.ToInt64().ToString());
+                if (err < 0)
+                {
+                    throw new InvalidOperationException(GetErrorString(err));
+                }
+            }
+
+            err = _mpvInitialize(_mpv);
             if (err < 0)
             {
                 throw new InvalidOperationException(GetErrorString(err));
             }
         }
-
-        err = _mpvInitialize(_mpv);
-        if (err < 0)
+        else
         {
-            throw new InvalidOperationException(GetErrorString(err));
+            throw new InvalidOperationException("Use InitializeWithOpenGL on macOS");
+        }
+    }
+
+    public void RenderToFramebuffer(int fbo, int width, int height, bool flipY = true)
+    {
+        if (_renderContext == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var fboData = new MpvOpenGLFBO
+        {
+            fbo = fbo,
+            w = width,
+            h = height,
+            internal_format = 0 // 0 = auto-detect
+        };
+
+        var fboPtr = Marshal.AllocHGlobal(Marshal.SizeOf<MpvOpenGLFBO>());
+        Marshal.StructureToPtr(fboData, fboPtr, false);
+
+        try
+        {
+            int flipYValue = flipY ? 1 : 0;
+            var flipYPtr = Marshal.AllocHGlobal(sizeof(int));
+            Marshal.WriteInt32(flipYPtr, flipYValue);
+
+            try
+            {
+                var renderParams = new[]
+                {
+                    new MpvRenderParam { type = MPV_RENDER_PARAM_OPENGL_FBO, data = fboPtr },
+                    new MpvRenderParam { type = MPV_RENDER_PARAM_FLIP_Y, data = flipYPtr },
+                    new MpvRenderParam { type = MPV_RENDER_PARAM_INVALID, data = IntPtr.Zero }
+                };
+
+                var renderParamsSize = Marshal.SizeOf<MpvRenderParam>() * renderParams.Length;
+                var renderParamsPtr = Marshal.AllocHGlobal(renderParamsSize);
+
+                try
+                {
+                    for (int i = 0; i < renderParams.Length; i++)
+                    {
+                        var offset = renderParamsPtr + (i * Marshal.SizeOf<MpvRenderParam>());
+                        Marshal.StructureToPtr(renderParams[i], offset, false);
+                    }
+
+                    var err = _mpvRenderContextRender(_renderContext, renderParamsPtr);
+                    if (err < 0 && err != -2) // -2 = nothing to render
+                    {
+                        throw new InvalidOperationException($"Render failed: {GetErrorString(err)}");
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(renderParamsPtr);
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(flipYPtr);
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(fboPtr);
         }
     }
 
@@ -293,6 +506,13 @@ public sealed class MpvPlayer : IDisposable
         }
 
         _disposed = true;
+
+        if (_renderContext != IntPtr.Zero)
+        {
+            _mpvRenderContextFree(_renderContext);
+            _renderContext = IntPtr.Zero;
+        }
+
         if (_mpv != IntPtr.Zero)
         {
             _mpvTerminateDestroy.Invoke(_mpv);
@@ -306,5 +526,28 @@ public sealed class MpvPlayer : IDisposable
         {
             throw new ObjectDisposedException(nameof(MpvPlayer));
         }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MpvOpenGLInitParams
+    {
+        public IntPtr get_proc_address;
+        public IntPtr get_proc_address_ctx;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MpvRenderParam
+    {
+        public int type;
+        public IntPtr data;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MpvOpenGLFBO
+    {
+        public int fbo;
+        public int w;
+        public int h;
+        public int internal_format;
     }
 }
