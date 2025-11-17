@@ -530,12 +530,36 @@ public sealed class MpvPlayer : IDisposable
 
     internal void TogglePlayPause()
     {
-        //TODO implement
+        EnsureNotDisposed();
+        if (_mpv == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var err = DoMpvCommand("cycle", "pause");
+        if (err < 0)
+        {
+            throw new InvalidOperationException(GetErrorString(err));
+        }
     }
 
     internal void Unload()
     {
-        // TODO implement unload (close media file and reset player state and blank screen)
+        EnsureNotDisposed();
+        if (_mpv == IntPtr.Zero)
+        {
+            return;
+        }
+
+        // Stop playback and clear the current file/playlist, returning to idle
+        var err = DoMpvCommand("stop");
+        if (err < 0)
+        {
+            throw new InvalidOperationException(GetErrorString(err));
+        }
+
+        // Ask UI to repaint so any previously rendered frame can be cleared
+        RequestRender?.Invoke();
     }
 
     [StructLayout(LayoutKind.Sequential)]

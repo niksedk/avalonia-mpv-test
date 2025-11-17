@@ -57,3 +57,5 @@ nunit-*.xml
 /.vs/AvaloniaApplication1/v17
 /.vs/AvaloniaApplication1/DesignTimeBuild/.dtbcache.v2
 /.vs/ProjectEvaluation
+/.vs/AvaloniaApplication1/copilot-chat/*
+/.vs/CopilotSnapshots/*
