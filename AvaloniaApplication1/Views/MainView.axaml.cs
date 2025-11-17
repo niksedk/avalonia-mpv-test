@@ -2,6 +2,7 @@
 using Avalonia.Interactivity;
 using AvaloniaApplication1.Video;
 using AvaloniaApplication1.Views.Controls;
+using System;
 using System.Runtime.InteropServices;
 
 namespace AvaloniaApplication1.Views;
@@ -21,8 +22,20 @@ public partial class MainView : UserControl
         _useMacOSOpenGL = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
         
         OpenButton.Click += OnOpenClicked;
+        TogglePlayPauseButton.Click += OnTogglePlayPauseClicked;
+        CloseVideoButton.Click += OnCloseClicked;
         this.AttachedToVisualTree += OnAttached;
         this.DetachedFromVisualTree += OnDetached;
+    }
+
+    private void OnCloseClicked(object? sender, RoutedEventArgs e)
+    {
+        _player?.Unload();
+    }
+
+    private void OnTogglePlayPauseClicked(object? sender, RoutedEventArgs e)
+    {
+        _player?.TogglePlayPause();
     }
 
     private async void OnOpenClicked(object? sender, RoutedEventArgs e)

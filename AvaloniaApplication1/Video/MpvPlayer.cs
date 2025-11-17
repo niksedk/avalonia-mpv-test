@@ -528,6 +528,16 @@ public sealed class MpvPlayer : IDisposable
         }
     }
 
+    internal void TogglePlayPause()
+    {
+        //TODO implement
+    }
+
+    internal void Unload()
+    {
+        // TODO implement unload (close media file and reset player state and blank screen)
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct MpvOpenGLInitParams
     {

@@ -8,15 +8,15 @@
              x:Class="AvaloniaApplication1.Views.MainView"
              x:DataType="vm:MainViewModel">
   <Design.DataContext>
-    <!-- This only sets the DataContext for the previewer in an IDE,
-         to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
     <vm:MainViewModel />
   </Design.DataContext>
 
   <Grid RowDefinitions="Auto,*" ColumnDefinitions="*">
     <StackPanel Orientation="Horizontal" Margin="8">
-      <Button x:Name="OpenButton" Content="Open Video" Width="120" />
-    </StackPanel>
+		<Button x:Name="OpenButton" Content="Open video..." />
+		<Button x:Name="TogglePlayPauseButton" Content="Play/pause" />
+		<Button x:Name="CloseVideoButton" Content="Close video" />
+	</StackPanel>
     <Grid Grid.Row="1" Background="Black">
       <controls:MpvHost x:Name="MpvHost" />
     </Grid>
