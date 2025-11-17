@@ -124,7 +124,7 @@ public sealed class MpvPlayer : IDisposable
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return ["libmpv.so", "libmpv.2.so"];
+            return ["libmpv.so.2", "libmpv.so"];
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
