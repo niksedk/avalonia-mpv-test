@@ -86,8 +86,19 @@ public class MpvOpenGLControl : OpenGlControlBase
 
         if (!_isInitialized || _mpvPlayer == null)
         {
+            System.Diagnostics.Debug.WriteLine("Render: Not initialized or no player");
             return;
         }
+
+        // If no file is loaded, keep the black screen and don't render
+        if (string.IsNullOrEmpty(_mpvPlayer.FileName))
+        {
+            System.Diagnostics.Debug.WriteLine("Render: No file loaded - showing black");
+            return;
+        }
+
+        System.Diagnostics.Debug.WriteLine($"Render: Rendering file {_mpvPlayer.FileName}");
+
 
         var scaling = VisualRoot?.RenderScaling ?? 1.0;
         var size = Bounds.Size * scaling;
@@ -134,6 +145,6 @@ public class MpvOpenGLControl : OpenGlControlBase
 
     public void Unload()
     {
-        _mpvPlayer?.Stop();
+        _mpvPlayer?.CloseFile();
     }
 }

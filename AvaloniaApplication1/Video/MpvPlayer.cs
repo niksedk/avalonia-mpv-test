@@ -806,13 +806,21 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
             return;
         }
 
-        var err = DoMpvCommand("stop");
+        // Pause playback first
+        var err = DoMpvCommand("set", "pause", "yes");
         if (err < 0)
         {
             throw new InvalidOperationException(GetErrorString(err));
         }
 
-        // Request UI repaint
+        // Seek back to position 0
+        err = DoMpvCommand("seek", "0", "absolute");
+        if (err < 0)
+        {
+            throw new InvalidOperationException(GetErrorString(err));
+        }
+
+        // Request render to show the first frame
         RequestRender?.Invoke();
     }
 
