@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace AvaloniaApplication1.Video;
 
@@ -522,10 +523,11 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
 
     public string FileName => _fileName;
 
-    public void LoadFile(string path)
+    public async Task LoadFile(string path)
     {
         EnsureNotDisposed();
-        var err = DoMpvCommand("loadfile", path);
+
+        var err = await Task.Run(() => DoMpvCommand("loadfile", path));
         if (err < 0)
         {
             throw new InvalidOperationException(GetErrorString(err));

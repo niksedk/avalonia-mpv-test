@@ -7,7 +7,7 @@ public interface IVideoPlayerInstance
     string Name { get; } // player name
     string FileName { get; } // current loaded media file
 
-    void LoadFile(string fileName);
+    Task LoadFile(string fileName);
     void CloseFile();
 
     void Play();
