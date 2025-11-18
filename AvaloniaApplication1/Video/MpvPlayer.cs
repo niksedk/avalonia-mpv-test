@@ -6,7 +6,7 @@ using System.Text;
 
 namespace AvaloniaApplication1.Video;
 
-public sealed class MpvPlayer : IDisposable
+public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
 {
     public static string MpvPath = string.Empty;
 
@@ -14,6 +14,30 @@ public sealed class MpvPlayer : IDisposable
     private IntPtr _mpv = IntPtr.Zero;
     private IntPtr _renderContext = IntPtr.Zero;
     private bool _disposed;
+    private string _fileName = string.Empty;    
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MpvOpenGLInitParams
+    {
+        public IntPtr get_proc_address;
+        public IntPtr get_proc_address_ctx;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MpvRenderParam
+    {
+        public int type;
+        public IntPtr data;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MpvOpenGLFBO
+    {
+        public int fbo;
+        public int w;
+        public int h;
+        public int internal_format;
+    }
 
     // Basic mpv functions
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -457,16 +481,6 @@ public sealed class MpvPlayer : IDisposable
         }
     }
 
-    public void LoadFile(string path)
-    {
-        EnsureNotDisposed();
-        var err = DoMpvCommand("loadfile", path);
-        if (err < 0)
-        {
-            throw new InvalidOperationException(GetErrorString(err));
-        }
-    }
-
     public void Dispose()
     {
         if (_disposed)
@@ -497,7 +511,39 @@ public sealed class MpvPlayer : IDisposable
         }
     }
 
-    internal void TogglePlayPause()
+    // public media player properties/methods
+
+    public string Name => "libmpv";
+
+    public string FileName => _fileName;
+
+    public bool IsPlaying => throw new NotImplementedException();
+
+    public bool IsPaused => throw new NotImplementedException();
+
+    public double Position { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+    public double Duration => throw new NotImplementedException();
+
+    public int VolumeMaximum => throw new NotImplementedException();
+
+    public double Volume { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+    public double Speed { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+
+    public void LoadFile(string path)
+    {
+        EnsureNotDisposed();
+        var err = DoMpvCommand("loadfile", path);
+        if (err < 0)
+        {
+            throw new InvalidOperationException(GetErrorString(err));
+        }
+
+        _fileName = path;
+    }
+
+    public void PlayOrPause() // toggle play/pause
     {
         EnsureNotDisposed();
         if (_mpv == IntPtr.Zero)
@@ -512,8 +558,25 @@ public sealed class MpvPlayer : IDisposable
         }
     }
 
-    internal void Unload()
+    public void Stop()
     {
+        //TODO...
+    }
+
+    public void Play()
+    {
+        //TODO...
+    }
+
+    public void Pause()
+    {
+        //TODO...
+    }
+
+    public void CloseFile()
+    {
+        _fileName = string.Empty;
+
         EnsureNotDisposed();
         if (_mpv == IntPtr.Zero)
         {
@@ -529,28 +592,5 @@ public sealed class MpvPlayer : IDisposable
 
         // Ask UI to repaint so any previously rendered frame can be cleared
         RequestRender?.Invoke();
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MpvOpenGLInitParams
-    {
-        public IntPtr get_proc_address;
-        public IntPtr get_proc_address_ctx;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MpvRenderParam
-    {
-        public int type;
-        public IntPtr data;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MpvOpenGLFBO
-    {
-        public int fbo;
-        public int w;
-        public int h;
-        public int internal_format;
     }
 }

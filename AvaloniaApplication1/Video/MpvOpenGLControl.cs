@@ -129,11 +129,11 @@ public class MpvOpenGLControl : OpenGlControlBase
 
     public void TogglePlayPause()
     {
-        _mpvPlayer?.TogglePlayPause();
+        _mpvPlayer?.PlayOrPause();
     }
 
     public void Unload()
     {
-        _mpvPlayer?.Unload();
+        _mpvPlayer?.Stop();
     }
 }
