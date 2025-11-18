@@ -283,27 +283,6 @@ public sealed class MpvPlayer : IDisposable
         return result;
     }
 
-    private IntPtr GetOpenGLProcAddress(IntPtr ctx, string name)
-    {
-        // Use the platform-specific method to get OpenGL proc addresses
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            // On macOS, we need to use NSOpenGLGetProcAddress or similar
-            // For Avalonia, this should be handled by the OpenGL context
-            return NativeMethods.CrossGetProcAddress(IntPtr.Zero, name);
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return NativeMethods.CrossGetProcAddress(IntPtr.Zero, name);
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            return NativeMethods.CrossGetProcAddress(IntPtr.Zero, name);
-        }
-
-        return IntPtr.Zero;
-    }
-
     private void OnRenderUpdate(IntPtr ctx)
     {
         // Request a redraw from the UI thread
