@@ -14,7 +14,7 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
     private IntPtr _mpv = IntPtr.Zero;
     private IntPtr _renderContext = IntPtr.Zero;
     private bool _disposed;
-    private string _fileName = string.Empty;    
+    private string _fileName = string.Empty;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MpvOpenGLInitParams
@@ -133,6 +133,11 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
     private const int MPV_RENDER_PARAM_INVALID = 0;
 
     private const string MPV_RENDER_API_TYPE_OPENGL = "opengl";
+
+    private const int MPV_FORMAT_STRING = 1;
+    private const int MPV_FORMAT_FLAG = 3;
+    private const int MPV_FORMAT_INT64 = 4;
+    private const int MPV_FORMAT_DOUBLE = 5;
 
     public event Action? RequestRender;
 
@@ -517,20 +522,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
 
     public string FileName => _fileName;
 
-    public bool IsPlaying => throw new NotImplementedException();
-
-    public bool IsPaused => throw new NotImplementedException();
-
-    public double Position { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-
-    public double Duration => throw new NotImplementedException();
-
-    public int VolumeMaximum => throw new NotImplementedException();
-
-    public double Volume { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-    public double Speed { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-
-
     public void LoadFile(string path)
     {
         EnsureNotDisposed();
@@ -558,21 +549,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
-    public void Stop()
-    {
-        //TODO...
-    }
-
-    public void Play()
-    {
-        //TODO...
-    }
-
-    public void Pause()
-    {
-        //TODO...
-    }
-
     public void CloseFile()
     {
         _fileName = string.Empty;
@@ -592,5 +568,290 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
 
         // Ask UI to repaint so any previously rendered frame can be cleared
         RequestRender?.Invoke();
+    }
+
+    public bool IsPlaying
+    {
+        get
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            try
+            {
+                double pauseValue = 0;
+                var nameBytes = GetUtf8Bytes("pause");
+                var err = _mpvGetPropertyDouble(_mpv, nameBytes, MPV_FORMAT_FLAG, ref pauseValue);
+
+                if (err < 0)
+                {
+                    return false;
+                }
+
+                return pauseValue == 0; // pause=0 means playing
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    // Implementation for IsPaused property
+    public bool IsPaused
+    {
+        get
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            try
+            {
+                double pauseValue = 0;
+                var nameBytes = GetUtf8Bytes("pause");
+                var err = _mpvGetPropertyDouble(_mpv, nameBytes, MPV_FORMAT_FLAG, ref pauseValue);
+
+                if (err < 0)
+                {
+                    return false;
+                }
+
+                return pauseValue == 1; // pause=1 means paused
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    // Implementation for Position property
+    public double Position
+    {
+        get
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            try
+            {
+                double position = 0;
+                var nameBytes = GetUtf8Bytes("time-pos");
+                var err = _mpvGetPropertyDouble(_mpv, nameBytes, MPV_FORMAT_DOUBLE, ref position);
+
+                if (err < 0)
+                {
+                    return 0;
+                }
+
+                return position;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+        set
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var err = DoMpvCommand("seek", value.ToString("F3"), "absolute");
+            if (err < 0)
+            {
+                throw new InvalidOperationException(GetErrorString(err));
+            }
+        }
+    }
+
+    // Implementation for Duration property
+    public double Duration
+    {
+        get
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            try
+            {
+                double duration = 0;
+                var nameBytes = GetUtf8Bytes("duration");
+                var err = _mpvGetPropertyDouble(_mpv, nameBytes, MPV_FORMAT_DOUBLE, ref duration);
+
+                if (err < 0)
+                {
+                    return 0;
+                }
+
+                return duration;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+    }
+
+    // Implementation for VolumeMaximum property
+    public int VolumeMaximum => 100;
+
+    // Implementation for Volume property
+    public double Volume
+    {
+        get
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return 100;
+            }
+
+            try
+            {
+                double volume = 100;
+                var nameBytes = GetUtf8Bytes("volume");
+                var err = _mpvGetPropertyDouble(_mpv, nameBytes, MPV_FORMAT_DOUBLE, ref volume);
+
+                if (err < 0)
+                {
+                    return 100;
+                }
+
+                return volume;
+            }
+            catch
+            {
+                return 100;
+            }
+        }
+        set
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return;
+            }
+
+            // Clamp volume between 0 and 100
+            var clampedVolume = Math.Max(0, Math.Min(100, value));
+            var err = DoMpvCommand("set", "volume", clampedVolume.ToString("F2"));
+            if (err < 0)
+            {
+                throw new InvalidOperationException(GetErrorString(err));
+            }
+        }
+    }
+
+    // Implementation for Speed property
+    public double Speed
+    {
+        get
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return 1.0;
+            }
+
+            try
+            {
+                double speed = 1.0;
+                var nameBytes = GetUtf8Bytes("speed");
+                var err = _mpvGetPropertyDouble(_mpv, nameBytes, MPV_FORMAT_DOUBLE, ref speed);
+
+                if (err < 0)
+                {
+                    return 1.0;
+                }
+
+                return speed;
+            }
+            catch
+            {
+                return 1.0;
+            }
+        }
+        set
+        {
+            EnsureNotDisposed();
+            if (_mpv == IntPtr.Zero)
+            {
+                return;
+            }
+
+            // Clamp speed to reasonable values (0.25x to 4x)
+            var clampedSpeed = Math.Max(0.25, Math.Min(4.0, value));
+            var err = DoMpvCommand("set", "speed", clampedSpeed.ToString("F2"));
+            if (err < 0)
+            {
+                throw new InvalidOperationException(GetErrorString(err));
+            }
+        }
+    }
+
+    // Implementation for Stop method
+    public void Stop()
+    {
+        EnsureNotDisposed();
+        if (_mpv == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var err = DoMpvCommand("stop");
+        if (err < 0)
+        {
+            throw new InvalidOperationException(GetErrorString(err));
+        }
+
+        // Request UI repaint
+        RequestRender?.Invoke();
+    }
+
+    // Implementation for Play method
+    public void Play()
+    {
+        EnsureNotDisposed();
+        if (_mpv == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var err = DoMpvCommand("set", "pause", "no");
+        if (err < 0)
+        {
+            throw new InvalidOperationException(GetErrorString(err));
+        }
+    }
+
+    // Implementation for Pause method
+    public void Pause()
+    {
+        EnsureNotDisposed();
+        if (_mpv == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var err = DoMpvCommand("set", "pause", "yes");
+        if (err < 0)
+        {
+            throw new InvalidOperationException(GetErrorString(err));
+        }
     }
 }
