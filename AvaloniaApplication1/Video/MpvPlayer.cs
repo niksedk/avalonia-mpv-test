@@ -600,7 +600,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
-    // Implementation for IsPaused property
     public bool IsPaused
     {
         get
@@ -631,7 +630,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
-    // Implementation for Position property
     public double Position
     {
         get
@@ -676,7 +674,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
-    // Implementation for Duration property
     public double Duration
     {
         get
@@ -707,10 +704,8 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
-    // Implementation for VolumeMaximum property
     public int VolumeMaximum => 100;
 
-    // Implementation for Volume property
     public double Volume
     {
         get
@@ -757,7 +752,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
-    // Implementation for Speed property
     public double Speed
     {
         get
@@ -804,7 +798,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
-    // Implementation for Stop method
     public void Stop()
     {
         EnsureNotDisposed();
@@ -823,7 +816,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         RequestRender?.Invoke();
     }
 
-    // Implementation for Play method
     public void Play()
     {
         EnsureNotDisposed();
@@ -839,7 +831,6 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
-    // Implementation for Pause method
     public void Pause()
     {
         EnsureNotDisposed();
