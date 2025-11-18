@@ -1,5 +1,3 @@
-using Avalonia;
-using Avalonia.Controls;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
 using Avalonia.Threading;
@@ -13,16 +11,31 @@ public class MpvOpenGLControl : OpenGlControlBase
     private MpvPlayer? _mpvPlayer;
     private bool _isInitialized;
 
+    // OpenGL delegates for clearing framebuffer
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void GlClearDelegate(uint mask);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void GlClearColorDelegate(float r, float g, float b, float a);
+
+    private GlClearDelegate? _glClear;
+    private GlClearColorDelegate? _glClearColor;
+
+    private const uint GL_COLOR_BUFFER_BIT = 0x00004000;
+
     public MpvPlayer? Player => _mpvPlayer;
 
     protected override void OnOpenGlInit(GlInterface gl)
     {
         base.OnOpenGlInit(gl);
 
+        // Resolve OpenGL functions
+        ResolveGlFunctions(gl);
+
         if (_mpvPlayer == null)
         {
             _mpvPlayer = new MpvPlayer();
-            
+
             // Set up the GetProcAddress delegate for OpenGL
             _mpvPlayer.InitializeWithOpenGL((ctx, name) =>
             {
@@ -38,22 +51,39 @@ public class MpvOpenGLControl : OpenGlControlBase
 
             // Subscribe to render requests
             _mpvPlayer.RequestRender += OnMpvRequestRender;
-            
+
             _isInitialized = true;
+        }
+    }
+
+    private void ResolveGlFunctions(GlInterface gl)
+    {
+        var clearPtr = gl.GetProcAddress("glClear");
+        var clearColorPtr = gl.GetProcAddress("glClearColor");
+
+        if (clearPtr != IntPtr.Zero)
+        {
+            _glClear = Marshal.GetDelegateForFunctionPointer<GlClearDelegate>(clearPtr);
+        }
+
+        if (clearColorPtr != IntPtr.Zero)
+        {
+            _glClearColor = Marshal.GetDelegateForFunctionPointer<GlClearColorDelegate>(clearColorPtr);
         }
     }
 
     private void OnMpvRequestRender()
     {
         // Request a redraw on the UI thread
-        Dispatcher.UIThread.Post(() =>
-        {
-            RequestNextFrameRendering();
-        }, DispatcherPriority.Render);
+        Dispatcher.UIThread.Post(RequestNextFrameRendering, DispatcherPriority.Render);
     }
 
     protected override void OnOpenGlRender(GlInterface gl, int fb)
     {
+        // Always clear the framebuffer first to remove stale video frames
+        _glClearColor?.Invoke(0f, 0f, 0f, 0f);
+        _glClear?.Invoke(GL_COLOR_BUFFER_BIT);
+
         if (!_isInitialized || _mpvPlayer == null)
         {
             return;
@@ -95,5 +125,15 @@ public class MpvOpenGLControl : OpenGlControlBase
     public void LoadFile(string path)
     {
         _mpvPlayer?.LoadFile(path);
+    }
+
+    public void TogglePlayPause()
+    {
+        _mpvPlayer?.TogglePlayPause();
+    }
+
+    public void Unload()
+    {
+        _mpvPlayer?.Unload();
     }
 }

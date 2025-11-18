@@ -317,6 +317,36 @@ public sealed class MpvPlayer : IDisposable
 
         _getProcAddress = getProcAddress;
 
+        // Set mpv to use OpenGL render API for all platforms
+        SetOptionString("vo", "libmpv");
+        SetOptionString("gpu-api", "opengl");
+
+        // Platform-specific GPU context configuration
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            // On Linux, configure gpu-context based on display server
+            try
+            {
+                var sessionType = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")?.ToLowerInvariant();
+                var waylandDisplay = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+                var x11Display = Environment.GetEnvironmentVariable("DISPLAY");
+
+                if (sessionType == "wayland" || (!string.IsNullOrEmpty(waylandDisplay) && sessionType == null))
+                {
+                    SetOptionString("gpu-context", "wayland");
+                }
+                else if (sessionType == "x11" || (!string.IsNullOrEmpty(x11Display) && sessionType == null))
+                {
+                    SetOptionString("gpu-context", "x11");
+                }
+                // else: don't force gpu-context, mpv will autodetect
+            }
+            catch
+            {
+                // Ignore detection errors; fallback to mpv defaults
+            }
+        }
+
         // Initialize mpv first
         var err = _mpvInitialize(_mpv);
         if (err < 0)
@@ -381,46 +411,6 @@ public sealed class MpvPlayer : IDisposable
         }
     }
 
-    public void InitializeWithWindowHandle(nint hwnd)
-    {
-        // Use window embedding for Windows and Linux
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || 
-            RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            LoadLib();
-            EnsureNotDisposed();
-
-            var err = SetOptionString("vo", "gpu");
-            if (err < 0)
-            {
-                throw new InvalidOperationException(GetErrorString(err));
-            }
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                SetOptionString("gpu-api", "d3d11");
-            }
-
-            if (hwnd != 0)
-            {
-                err = SetOptionString("wid", hwnd.ToInt64().ToString());
-                if (err < 0)
-                {
-                    throw new InvalidOperationException(GetErrorString(err));
-                }
-            }
-
-            err = _mpvInitialize(_mpv);
-            if (err < 0)
-            {
-                throw new InvalidOperationException(GetErrorString(err));
-            }
-        }
-        else
-        {
-            throw new InvalidOperationException("Use InitializeWithOpenGL on macOS");
-        }
-    }
 
     public void RenderToFramebuffer(int fbo, int width, int height, bool flipY = true)
     {

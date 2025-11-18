@@ -9,10 +9,10 @@ namespace AvaloniaApplication1.Views.Controls;
 public class MpvHost : NativeControlHost
 {
     public static readonly StyledProperty<nint?> WindowHandleProperty =
-    AvaloniaProperty.Register<MpvHost, nint?>(nameof(WindowHandle));
+        AvaloniaProperty.Register<MpvHost, nint?>(nameof(WindowHandle));
 
     public static readonly StyledProperty<string?> HandleDescriptorProperty =
-    AvaloniaProperty.Register<MpvHost, string?>(nameof(HandleDescriptor));
+        AvaloniaProperty.Register<MpvHost, string?>(nameof(HandleDescriptor));
 
     public nint? WindowHandle
     {
@@ -73,6 +73,7 @@ public class MpvHost : NativeControlHost
             WindowHandle = null;
             HandleDescriptor = null;
         }
+
         base.DestroyNativeControlCore(control);
     }
 
@@ -83,6 +84,7 @@ public class MpvHost : NativeControlHost
         {
             Win32.ResizeChild(hwnd, (int)Math.Max(0, size.Width), (int)Math.Max(0, size.Height));
         }
+
         return size;
     }
 
@@ -92,18 +94,18 @@ public class MpvHost : NativeControlHost
 
         [System.Runtime.InteropServices.DllImport(User32, SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
         private static extern nint CreateWindowExW(
-        int dwExStyle,
-        string lpClassName,
-        string? lpWindowName,
-        int dwStyle,
-        int x,
-        int y,
-        int nWidth,
-        int nHeight,
-        nint hWndParent,
-        nint hMenu,
-        nint hInstance,
-        nint lpParam);
+            int dwExStyle,
+            string lpClassName,
+            string? lpWindowName,
+            int dwStyle,
+            int x,
+            int y,
+            int nWidth,
+            int nHeight,
+            nint hWndParent,
+            nint hMenu,
+            nint hInstance,
+            nint lpParam);
 
         [System.Runtime.InteropServices.DllImport(User32, SetLastError = true)]
         private static extern bool DestroyWindow(nint hWnd);
