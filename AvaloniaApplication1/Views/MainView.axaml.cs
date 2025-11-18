@@ -1,7 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using AvaloniaApplication1.Video;
-using System;
 
 namespace AvaloniaApplication1.Views;
 
@@ -40,7 +39,7 @@ public partial class MainView : UserControl
             AllowMultiple = false,
             Filters =
             {
-                new FileDialogFilter { Name = "Video", Extensions = { "mp4","mkv","avi","mov","webm","ts","m2ts" } },
+                new FileDialogFilter { Name = "Video", Extensions = { "mp4", "mkv", "avi", "mov", "webm", "ts", "m2ts" } },
                 new FileDialogFilter { Name = "All", Extensions = { "*" } }
             }
         };
