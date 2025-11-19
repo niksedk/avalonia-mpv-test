@@ -27,6 +27,7 @@ public class MpvOpenGLControl : OpenGlControlBase
 
     protected override void OnOpenGlInit(GlInterface gl)
     {
+        System.Diagnostics.Debug.WriteLine("OnOpenGlInit called!");
         base.OnOpenGlInit(gl);
 
         // Resolve OpenGL functions
@@ -34,6 +35,7 @@ public class MpvOpenGLControl : OpenGlControlBase
 
         if (_mpvPlayer == null)
         {
+            System.Diagnostics.Debug.WriteLine("Initializing MpvPlayer...");
             _mpvPlayer = new MpvPlayer();
 
             // Set up the GetProcAddress delegate for OpenGL
@@ -53,6 +55,7 @@ public class MpvOpenGLControl : OpenGlControlBase
             _mpvPlayer.RequestRender += OnMpvRequestRender;
 
             _isInitialized = true;
+            System.Diagnostics.Debug.WriteLine("MpvPlayer initialized successfully!");
         }
     }
 

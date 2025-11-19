@@ -1,6 +1,6 @@
 ﻿using System;
-
 using Avalonia;
+using Avalonia.X11;
 
 namespace AvaloniaApplication1.Desktop;
 
@@ -18,6 +18,9 @@ class Program
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
+            .With(new X11PlatformOptions
+            {
+                RenderingMode = new[] { X11RenderingMode.Glx, X11RenderingMode.Egl }
+            })
             .LogToTrace();
-
 }
