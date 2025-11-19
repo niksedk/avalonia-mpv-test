@@ -131,9 +131,14 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
     private const int MPV_RENDER_PARAM_OPENGL_FBO = 3;
     private const int MPV_RENDER_PARAM_FLIP_Y = 4;
     private const int MPV_RENDER_PARAM_DEPTH = 5;
+    private const int MPV_RENDER_PARAM_SW_SIZE = 6;
+    private const int MPV_RENDER_PARAM_SW_FORMAT = 7;
+    private const int MPV_RENDER_PARAM_SW_STRIDE = 8;
+    private const int MPV_RENDER_PARAM_SW_POINTER = 9;
     private const int MPV_RENDER_PARAM_INVALID = 0;
 
     private const string MPV_RENDER_API_TYPE_OPENGL = "opengl";
+    private const string MPV_RENDER_API_TYPE_SW = "sw";
 
     private const int MPV_FORMAT_STRING = 1;
     private const int MPV_FORMAT_FLAG = 3;
@@ -420,6 +425,67 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         }
     }
 
+    public void InitializeWithSoftwareRendering()
+    {
+        LoadLib();
+        EnsureNotDisposed();
+
+        // Set mpv to use software rendering
+        SetOptionString("vo", "libmpv");
+
+        // Initialize mpv
+        var err = _mpvInitialize(_mpv);
+        if (err < 0)
+        {
+            throw new InvalidOperationException(GetErrorString(err));
+        }
+
+        // Build render context params for software rendering
+        var apiTypeBytes = Encoding.UTF8.GetBytes(MPV_RENDER_API_TYPE_SW + "\0");
+        var apiTypePtr = Marshal.AllocHGlobal(apiTypeBytes.Length);
+        Marshal.Copy(apiTypeBytes, 0, apiTypePtr, apiTypeBytes.Length);
+
+        try
+        {
+            var renderParams = new[]
+            {
+                new MpvRenderParam { type = MPV_RENDER_PARAM_API_TYPE, data = apiTypePtr },
+                new MpvRenderParam { type = MPV_RENDER_PARAM_INVALID, data = IntPtr.Zero }
+            };
+
+            var renderParamsSize = Marshal.SizeOf<MpvRenderParam>() * renderParams.Length;
+            var renderParamsPtr = Marshal.AllocHGlobal(renderParamsSize);
+
+            try
+            {
+                for (int i = 0; i < renderParams.Length; i++)
+                {
+                    var offset = renderParamsPtr + (i * Marshal.SizeOf<MpvRenderParam>());
+                    Marshal.StructureToPtr(renderParams[i], offset, false);
+                }
+
+                // Create render context
+                err = _mpvRenderContextCreate(out _renderContext, _mpv, renderParamsPtr);
+                if (err < 0)
+                {
+                    throw new InvalidOperationException($"Failed to create software render context: {GetErrorString(err)}");
+                }
+
+                // Set update callback
+                _renderUpdateCallback = OnRenderUpdate;
+                var callbackPtr = Marshal.GetFunctionPointerForDelegate(_renderUpdateCallback);
+                _mpvRenderContextSetUpdateCallback(_renderContext, callbackPtr, IntPtr.Zero);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(renderParamsPtr);
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(apiTypePtr);
+        }
+    }
 
     public void RenderToFramebuffer(int fbo, int width, int height, bool flipY = true)
     {
@@ -484,6 +550,66 @@ public sealed class MpvPlayer : IDisposable, IVideoPlayerInstance
         finally
         {
             Marshal.FreeHGlobal(fboPtr);
+        }
+    }
+
+    public void SoftwareRender(int width, int height, IntPtr surfaceAddress, string format)
+    {
+        if (_disposed) return;
+        if (_renderContext == IntPtr.Zero) return;
+
+        unsafe
+        {
+            var size = new[] { width, height };
+            var stride = new[] { (uint)width * 4 };
+
+            fixed (int* sizePtr = size)
+            {
+                fixed (uint* stridePtr = stride)
+                {
+                    var formatBytes = Encoding.UTF8.GetBytes(format + "\0");
+                    var formatPtr = Marshal.AllocHGlobal(formatBytes.Length);
+                    Marshal.Copy(formatBytes, 0, formatPtr, formatBytes.Length);
+
+                    try
+                    {
+                        var renderParams = new[]
+                    {
+          new MpvRenderParam { type = MPV_RENDER_PARAM_SW_SIZE, data = (IntPtr)sizePtr },
+        new MpvRenderParam { type = MPV_RENDER_PARAM_SW_FORMAT, data = formatPtr },
+      new MpvRenderParam { type = MPV_RENDER_PARAM_SW_STRIDE, data = (IntPtr)stridePtr },
+     new MpvRenderParam { type = MPV_RENDER_PARAM_SW_POINTER, data = surfaceAddress },
+        new MpvRenderParam { type = MPV_RENDER_PARAM_INVALID, data = IntPtr.Zero }
+           };
+
+                        var renderParamsSize = Marshal.SizeOf<MpvRenderParam>() * renderParams.Length;
+                        var renderParamsPtr = Marshal.AllocHGlobal(renderParamsSize);
+
+                        try
+                        {
+                            for (int i = 0; i < renderParams.Length; i++)
+                            {
+                                var offset = renderParamsPtr + (i * Marshal.SizeOf<MpvRenderParam>());
+                                Marshal.StructureToPtr(renderParams[i], offset, false);
+                            }
+
+                            var err = _mpvRenderContextRender(_renderContext, renderParamsPtr);
+                            if (err < 0 && err != -2) // -2 = nothing to render
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Software render failed: {GetErrorString(err)}");
+                            }
+                        }
+                        finally
+                        {
+                            Marshal.FreeHGlobal(renderParamsPtr);
+                        }
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(formatPtr);
+                    }
+                }
+            }
         }
     }
 
